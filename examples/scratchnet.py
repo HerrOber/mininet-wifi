@@ -16,24 +16,28 @@ from mininet.util import quietRun
 
 from time import sleep
 
-def scratchNet( cname='controller', cargs='-v ptcp:' ):
+def scratchNet( cname='~/Applications/pox/./pox.py', cargs='forwarding.l2_learning ' ):
     "Create network from scratch using Open vSwitch."
 
     info( "*** Creating nodes\n" )
-    controller = Node( 'c0', inNamespace=False )
-    switch = Node( 's0', inNamespace=False )
+    controller = Node( 'c0', inNamespace=True )
+    switch = Node( 's0', inNamespace=True )
     h0 = Node( 'h0' )
     h1 = Node( 'h1' )
 
     info( "*** Creating links\n" )
     Link( h0, switch )
     Link( h1, switch )
+    Link( controller, switch )
 
     info( "*** Configuring hosts\n" )
     h0.setIP( '192.168.123.1/24' )
     h1.setIP( '192.168.123.2/24' )
+    controller.setIP( '192.168.123.3/24' )
+    
     info( str( h0 ) + '\n' )
     info( str( h1 ) + '\n' )
+    info( str( controller ) + '\n' )
 
     info( "*** Starting network using Open vSwitch\n" )
     controller.cmd( cname + ' ' + cargs + '&' )
@@ -44,15 +48,16 @@ def scratchNet( cname='controller', cargs='-v ptcp:' ):
 
     # Note: controller and switch are in root namespace, and we
     # can connect via loopback interface
-    switch.cmd( 'ovs-vsctl set-controller dp0 tcp:127.0.0.1:6633' )
+    switch.cmd( 'ovs-vsctl set-controller dp0 tcp:192.168.123.3:6633' )
 
     info( '*** Waiting for switch to connect to controller' )
-    while 'is_connected' not in quietRun( 'ovs-vsctl show' ):
-        sleep( 1 )
-        info( '.' )
+    #while 'is_connected' not in quietRun( 'ovs-vsctl show' ):
+     #   sleep( 1 )
+      #  info( '.' )
     info( '\n' )
 
     info( "*** Running test\n" )
+    h0.cmdPrint( 'ping -c1 ' + h1.IP() )
     h0.cmdPrint( 'ping -c1 ' + h1.IP() )
 
     info( "*** Stopping network\n" )
@@ -62,7 +67,7 @@ def scratchNet( cname='controller', cargs='-v ptcp:' ):
     info( '\n' )
 
 if __name__ == '__main__':
-    setLogLevel( 'info' )
+    setLogLevel( 'debug' )
     info( '*** Scratch network demo (kernel datapath)\n' )
     Mininet.init()
     scratchNet()

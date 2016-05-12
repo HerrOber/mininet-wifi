@@ -28,10 +28,16 @@ class emulationEnvironment ( object ):
     def numberOfAssociatedStations( self, ap ):
         "Number of Associated Stations"
         cmd = 'iw dev %s-wlan0 station dump | grep Sta | grep -c ^' % ap     
+        """
         proc = subprocess.Popen("exec " + cmd, stdout=subprocess.PIPE,shell=True)   
         (out, err) = proc.communicate()
+        """
+        out = ap.cmd(cmd)
         output = out.rstrip('\n')
-        ap.nAssociatedStations = int(output)        
+        ap.nAssociatedStations = int(output)
+        #print "nAssociatedStations: %s" % output
+        
+
     
     @classmethod
     def getPhy(self):

@@ -101,21 +101,21 @@ from math import ceil
 
 from mininet.cli import CLI
 from mininet.log import info, error, debug, output, warn
-from mininet.node import ( Node, Host, OVSKernelSwitch, DefaultController,
+from mininet.node2 import ( Node, Host, OVSKernelSwitch, DefaultController,
                            Controller )
 from mininet.nodelib import NAT
-from mininet.link import Link, Intf, TCLink
+from mininet.link2 import Link, Intf, TCLink
 from mininet.util import ( quietRun, fixLimits, numCores, ensureRoot,
                            macColonHex, ipStr, ipParse, netParse, ipAdd,
                            waitListening )
 from mininet.term import cleanUpScreens, makeTerms
-from mininet.wifi import module, station, mobility, getWlan
+from mininet.wifi2 import module, station, mobility, getWlan
 from mininet.wifiPlot import plot
 from mininet.wifiEmulationEnvironment import emulationEnvironment
 from mininet.wifiDevices import deviceRange, deviceDataRate
 from mininet.wifiParameters import wifiParameters
 from mininet.wifiMobilityModels import distance
-from mininet.wifiAccessPoint import accessPoint
+from mininet.wifiAccessPoint2 import accessPoint
 
 import sys
 sys.path.append(str(os.getcwd())+'/mininet/')
@@ -124,7 +124,7 @@ from mininet.vanet import vanet
 from __builtin__ import True
 
 # Mininet version: should be consistent with README and LICENSE
-VERSION = "1.8r2"
+VERSION = "1.8r1"
 
 class Mininet( object ):
     "Network emulation with hosts spawned in network namespaces."
@@ -133,7 +133,7 @@ class Mininet( object ):
                   controller=DefaultController, link=Link, intf=Intf,
                   build=True, xterms=False, cleanup=False, ipBase='10.0.0.0/8',
                   inNamespace=False, autoSetMacs=False, autoStaticArp=False, autoPinCpus=False,
-                  listenPort=None, waitConnected=False, 
+                  listenPort=None, waitConnected=False, ovsScriptsPath=None,
                   ssid="my-ssid", mode="g", channel="6" ):
         """Create Mininet object.
            topo: Topo (topology) object or None
@@ -153,6 +153,7 @@ class Mininet( object ):
            listenPort: base listening port to open; will be incremented for
                each additional switch in the net if inNamespace=False"""
         self.thread = threading.Thread()
+        self.ovsScriptsPath = ovsScriptsPath
         self.topo = topo
         self.switch = switch
         self.baseStation = switch
@@ -496,7 +497,13 @@ class Mininet( object ):
             bs.channel = channel
         else:
             bs.channel = self.channel 
-            
+        
+        ip = ("%s" % params.pop('ip', {}))
+        if(ip!="{}"):
+            bs.switchIP = ip
+        else:
+            raise Exception( 'In-Band AP needs an IP address' )
+
         equipmentModel = ("%s" % params.pop('equipmentModel', {}))
         if(equipmentModel!="{}"):
             bs.equipmentModel = equipmentModel
@@ -576,6 +583,43 @@ class Mininet( object ):
         self.nameToNode[ name ] = sw
         return sw
 
+    def addHostSwitch(self, name, cls=None, **params):
+        """defaults = { 'listenPort': self.listenPort,
+                     'inNamespace': self.inNamespace }
+        
+        defaults.update( params )
+        
+        if not cls:
+            cls = self.host
+        
+        sw = cls( name, **defaults )
+        sw.type = 'host'
+        
+        if not self.inNamespace and self.listenPort:
+            self.listenPort += 1
+        self.hosts.append( sw )
+        self.nameToNode[ name ] = sw
+        return sw"""
+
+        defaults = { 'ip': ipAdd( self.nextIP,
+                                  ipBaseNum=self.ipBaseNum,
+                                  prefixLen=self.prefixLen ) +
+                                  '/%s' % self.prefixLen }
+        if self.autoSetMacs:
+            defaults[ 'mac' ] = macColonHex( self.nextIP )
+        if self.autoPinCpus:
+            defaults[ 'cores' ] = self.nextCore
+            self.nextCore = ( self.nextCore + 1 ) % self.numCores
+        self.nextIP += 1
+        defaults.update( params )
+        if not cls:
+            cls = self.host
+        h = cls( name, **defaults )  
+        h.type = 'host'    
+        self.hosts.append( h )
+        self.nameToNode[ name ] = h
+        return h
+
     def addController( self, name='c0', controller=None, **params ):
         """Add controller.
            controller: Controller class"""
@@ -596,6 +640,12 @@ class Mininet( object ):
             self.controllers.append( controller_new )
             self.nameToNode[ name ] = controller_new
         return controller_new
+
+    def setInBandController( self, switches, controllers):
+        """Add in-band controller.
+        meerly registers the ip of the controller"""
+        for switch in switches:
+            switch.setInBandController(controllers)
 
     def addNAT( self, name='nat0', connect=True, inNamespace=False,
                 **params):
@@ -775,9 +825,11 @@ class Mininet( object ):
                 intf = self.newapif[self.virtualWlan.index(str(ap)+str(wlan))]
                 
                 ap.frequency.append(str(wlan))
-                ap.txpower.append(wlan)
+                ap.txpower.append(str(wlan))
                 ap.antennaHeight.append(0.1)
                 ap.antennaGain.append(1)
+                wifiParameters(param='get_frequency', node=ap, wlan=wlan)
+                wifiParameters(param='get_tx_power', node=ap, wlan=wlan) 
                 
                 self.auth_algs = None
                 self.wpa = None
@@ -813,11 +865,12 @@ class Mininet( object ):
                 wifiparam.setdefault( 'wep_key0', self.wep_key0 )
                 wifiparam.setdefault( 'wlan', wlan )
                 wifiparam.setdefault( 'intf', intf )
-               
-                accessPoint(ap, **wifiparam)   
-                wifiParameters(param='get_frequency', node=ap, wlan=wlan)
-                wifiParameters(param='get_tx_power', node=ap, wlan=wlan) 
+
+                accessPoint(ap, **wifiparam)
                 
+
+
+
             
     """    
     def wds( self, ap1, ap2, cls=None, **params ):
@@ -852,14 +905,17 @@ class Mininet( object ):
                                 
     def configureWifiNodes(self):
         if self.ifaceConfigured == False:
-            module(action = 'start', wifiRadios = emulationEnvironment.wifiRadios)
+            module(action = 'start', wifiRadios = emulationEnvironment.wifiRadios) # creates wlan1/2/3
             emulationEnvironment.isWiFi = True
             self.link = TCLink
             self.newapif = getWlan.virtual()  #Get Virtual Wlans      
-            station.assingIface(self.stations, self.virtualWlan)
+            station.assingIface(self.stations, self.virtualWlan)    # removes wlan1/2 into namespace of sta?
+            module.assingIface(self.accessPoints, self.virtualWlan, self.stations)
             self.ifaceConfigured = True
-            self.configureAP() #configure AP
+            self.configureAP() #configure AP   makes wlan3 into ap1-wlan0
             self.firstAssociation = False
+
+
             
             
     def addLink( self, node1, node2, port1=None, port2=None, 
@@ -869,7 +925,7 @@ class Mininet( object ):
         node1 = node1 if not isinstance( node1, basestring ) else self[ node1 ]
         node2 = node2 if not isinstance( node2, basestring ) else self[ node2 ]
         options = dict( params )
-        
+
         #If AP and STA
         if((node1.type =='station' and node2.type == 'accessPoint') \
             or ( node2.type =='station' and node1.type == 'accessPoint')):
@@ -986,15 +1042,17 @@ class Mininet( object ):
             # Set default MAC - this should probably be in Link
             options.setdefault( 'addr1', self.randMac() )
             options.setdefault( 'addr2', self.randMac() )
+            options.update(params)
             
             cls = self.link if cls is None else cls
-            link = cls( node1, node2, **options )
+            link = cls( node1, node2, **options )   #link created here, i.e. interfaces set up
             self.links.append( link )
             return link
     
     def configHosts( self ):
         "Configure a set of hosts."
         for host in self.hosts:
+
             #info( host.name + ' ' )
             intf = host.defaultIntf()
             if intf:
@@ -1002,7 +1060,7 @@ class Mininet( object ):
             else:
                 # Don't configure nonexistent intf
                 host.configDefault( ip=None, mac=None )
-            
+                        
             # You're low priority, dude!
             # BL: do we want to do this here or not?
             # May not make sense if we have CPU lmiting...
@@ -1125,10 +1183,13 @@ class Mininet( object ):
         info( '*** Starting switches and access points\n' )
         for switch in self.switches:
             info( switch.name + ' ')
-            switch.start( self.controllers )
+            #switch.start( self.controllers )
             if switch.type == 'accessPoint':
-                os.system('ovs-vsctl add-br %s' % switch.name)
-          
+                switch.cmd( 'ifconfig lo up')
+                switch.cmd('sh %s/startOvsDb %s' % (self.ovsScriptsPath, switch.name))
+                switch.cmd('sh %s/startOvs %s' % (self.ovsScriptsPath, switch.name))
+                switch.cmd('sh %s/createBrSdn %s' % (self.ovsScriptsPath, switch.name))
+
         started = {}
         for swclass, switches in groupby(
                 sorted( self.switches, key=type ), type ):
@@ -1141,7 +1202,27 @@ class Mininet( object ):
         for switch in self.switches:
             if switch.type == 'accessPoint':  
                 for iface in range(0, switch.nWlans):
-                    accessPoint.apBridge(switch.name, iface)
+                    #accessPoint.apBridge(switch.name, iface)
+                    intf = str(switch.name)+'-'+'wlan'+str(iface)
+                    #os.system("sh %s/addBrPortSdn %s %s" % (self.ovsScriptsPath, switch.name, intf))
+                    switch.cmd("sh %s/addBrPortSdn %s %s" % (self.ovsScriptsPath, switch.name, intf))
+                    #print("sh %s/addBrPortSdn %s %s" % (self.ovsScriptsPath, switch.name, intf))
+
+                controllers = ''
+                ncntr = len(switch.inBandControllers)
+                i = 0
+                for (ip, port) in switch.inBandControllers:
+                    controllers += 'tcp:%s:%s' % (ip,port)
+                    i += 1
+                    if(i < ncntr):
+                        controllers += ' '
+                debug('controllers %s' % controllers)
+
+                for intf in switch.intfNames():
+                    switch.cmd("sh %s/addBrPortSdn %s %s" % (self.ovsScriptsPath, switch.name, intf))
+
+                #switch.cmd("sh ~/Applications/coherent/scripts/addBrPortSdn %s %s%s" % (switch.name, switch.name, "-eth0"))
+                switch.cmd("sh %s/setBrControllerSdn %s %s %s" % (self.ovsScriptsPath, switch.name, controllers, switch.switchIP))
         
         info( '\n' )
         if self.waitConn:
@@ -1182,6 +1263,7 @@ class Mininet( object ):
         for switch in self.switches:
             info( switch.name + ' ' )
             if switch not in stopped:
+                switch.cmd('sh %s/shutdown %s' % (self.ovsScriptsPath, switch.name))
                 switch.stop()
             switch.terminate()
         info( '\n' )
@@ -1627,6 +1709,8 @@ class Mininet( object ):
                     device = ap  
             if device.type == 'station':
                 for wlan in range(device.nWlans):
+                    wifiParameters(param='get_frequency', node=device, wlan=wlan)
+                    wifiParameters(param='get_tx_power', node=device, wlan=wlan) 
                     print "--------------------------------"                
                     print "Interface: %s-wlan%s" % (device, wlan)
                     try: # it is important when not infra

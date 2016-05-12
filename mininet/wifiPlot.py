@@ -76,6 +76,7 @@ class plot (object):
     def instantiateGraph(self, MAX_X, MAX_Y):
         """instantiateGraph""" 
         plt.ion()
+        #print "hejhallasugkukpython"
         plt.title("Mininet-WiFi Graph")
         self.ax = plt.subplot(111)
         self.ax.set_xlabel('meters')
