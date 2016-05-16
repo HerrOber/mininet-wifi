@@ -333,6 +333,8 @@ class mobility ( object ):
             if sta.associatedAp[wlan] == 'NoAssociated':
                 station.iwCommand(sta, wlan, ('connect %s' % ap.ssid[0]))
                 #emulationEnvironment.getWiFiParameters(sta, wlan)
+
+                # add station to ap list and remove the old references
                 ap.associatedStations.append(sta)
                 for apx in emulationEnvironment.apList:
                     if apx != ap and sta in apx.associatedStations:
