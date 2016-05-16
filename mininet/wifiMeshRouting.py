@@ -3,7 +3,7 @@ author: Ramon Fontes (ramonrf@dca.fee.unicamp.br)
         ramonfontes.com
 """
 
-from mininet.wifiMobilityModels import distance
+from mininet.wifiChannel import channelParameters
 
 class listNodes ( object ):
     
@@ -24,8 +24,7 @@ class listNodes ( object ):
         
         for ref_sta in stationList:
             if ref_sta != sta:
-                d = distance(sta, ref_sta)
-                dist = d.dist
+                dist = channelParameters.getDistance(sta, ref_sta)
                 totalRange = sta.range + ref_sta.range
                 if dist < totalRange:
                     ref_distance = ref_distance + dist
@@ -53,8 +52,7 @@ class meshRouting ( object ):
            
             for ref_sta in stationList:
                 if ref_sta != sta:
-                    d = distance(sta, ref_sta)
-                    dist = d.dist
+                    dist = channelParameters.getDistance(sta, ref_sta)
                             
                     totalRange = sta.range + ref_sta.range
                     if dist < totalRange:
@@ -64,12 +62,15 @@ class meshRouting ( object ):
                                     associate = True
             
             """Mesh Join""" 
-            if associate == True and sta.isAssociated[wlan] == False:
+            if associate == True and sta.isAssociated[wlan] == False:                
+                sta.pexec('ifconfig %s-%s%s up' % (sta, iface, wlan))
                 sta.pexec('iw dev %s-%s%s mesh join %s' % (sta, iface, wlan, sta.ssid[wlan]))   
                 sta.isAssociated[wlan] = True
             
             """Adding all reached target paths"""
             if associate:
+                sta.pexec('ifconfig %s-%s%s up' % (sta, iface, wlan))
+            
                 sta.isAssociated[wlan] = True
                 exist = []
                 sta_ref = []
@@ -106,10 +107,11 @@ class meshRouting ( object ):
                         if y.meshMac[w] not in controlMeshMac:
                             sta.pexec('iw dev %s-%s%s mpath del %s' % (sta, iface, wlan, y.meshMac[w]))
             
-                #sta.cmd('%s' % (command[:-3]))
                 sta.isAssociated[wlan] = True
                 
             """mesh leave"""
             if associate == False:
                 sta.pexec('iw dev %s-%s%s mesh leave' % (sta, iface, wlan))
+                
+                sta.pexec('ifconfig %s-mp0 down' % sta)
                 sta.isAssociated[wlan] = False

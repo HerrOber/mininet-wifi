@@ -143,7 +143,7 @@ function mn_deps {
 # Install Mininet-WiFi deps
 function wifi_deps {
     echo "Installing Mininet-WiFi dependencies"
-    $install iw wireless-tools wpasupplicant python-numpy python-scipy pkg-config python-matplotlib libnl-dev libssl-dev
+    $install iw wireless-tools wpasupplicant python-numpy python-scipy pkg-config python-matplotlib libnl-3-dev libnl-genl-3-dev libssl-dev
     pushd $MININET_DIR/mininet-wifi/hostapd/hostapd
     cp defconfig .config
     sudo make && make install
@@ -545,7 +545,7 @@ function pox {
 # "Install" iw
 function iw {
     echo "Installing iw..."
-    $install iw wireless-tools wpasupplicant python-numpy python-scipy pkg-config python-matplotlib libnl-dev libssl-dev
+    $install iw wireless-tools wpasupplicant python-numpy python-scipy pkg-config python-matplotlib libnl-3-dev libnl-genl-3-dev libssl-dev
     pushd $MININET_DIR/mininet-wifi/hostapd/hostapd
     cp defconfig .config
     sudo make && make install
@@ -735,7 +735,7 @@ function vm_clean {
     # Note: you can shrink the .vmdk in vmware using
     # vmware-vdiskmanager -k *.vmdk
     echo "Zeroing out disk blocks for efficient compaction..."
-    time sudo dd if=/dev/zero of=/tmp/zero bs=1M
+    time sudo dd if=/dev/zero of=/tmp/zero bs=1M || true
     sync ; sleep 1 ; sync ; sudo rm -f /tmp/zero
 
 }

@@ -20,11 +20,19 @@ class propagationModel ( object ):
             self.__getattribute__(self.model)(node1, node2, dist, wlan)
      
     def receivedPower(self, node1, node2, wlan, modelValue):    
-        txpower = node2.txpower[0]
+        txpower = node2.txpower[wlan]
         #txgain = 24
         #rxgain = 24
         self.rssi = txpower + modelValue   
         return self.rssi
+    
+    def attenuation(self, node1, node2, dist, wlan):
+        alpha = 1
+        gT = node2.antennaGain[wlan] 
+        gR = node1.antennaGain[wlan]
+        
+        L = -27.56 + 10 * alpha * math.log10(dist) + 20 * math.log(node1.frequency[wlan])
+        P = node2.txpower[wlan] * gR * gT * L
     
     def friisPropagationLossModel(self, node1, node2, dist, wlan):
         """Friis Propagation Loss Model:
@@ -46,8 +54,8 @@ class propagationModel ( object ):
             self.receivedPower(node1, node2, wlan, modelValue)
         except:
             return self.rssi
-                
-    def twoRayGroundPropagationLossModel(self, node1, node2, distance, wlan):
+        
+    def twoRayGroundPropagationLossModel(self, node1, node2, dist, wlan):
         """Two Ray Ground Propagation Loss Model:
         (gT): Tx Antenna Gain (dBi)
         (gR): Rx Antenna Gain (dBi)
@@ -55,21 +63,21 @@ class propagationModel ( object ):
         (hR): Rx Antenna Height
         (d) is the distance between the transmitter and the receiver (m)
         (L): System loss"""
-       
+        
         gT = node2.antennaGain[wlan] 
         gR = node1.antennaGain[wlan]
         hT = node2.antennaHeight[wlan]
         hR = node1.antennaHeight[wlan]
-        d = distance
-        L = self.L
+        d = dist
+        L = self.systemLoss
         
         try:
-            self.rssi = node2.txpower[wlan] + 10 * math.log10(gT * gR * hT**2 * hR**2 / d**4 * L)
+            self.rssi = (node2.txpower[wlan] * gT * gR * hT**2 * hR**2) / (d**4 * L)
             return self.rssi
         except:
             return self.rssi
             
-    def logDistancePropagationLossModel(self, node1, node2, distance, wlan):
+    def logDistancePropagationLossModel(self, node1, node2, dist, wlan):
         """Log Distance Propagation Loss Model:
         referenceDistance (m): The distance at which the reference loss is calculated
         referenceLoss (db): The reference loss at reference distance. Default for 1m is 46.6777
@@ -78,9 +86,9 @@ class propagationModel ( object ):
         referenceDistance = 1
         referenceLoss = 46.6777
         exponent = 2
-        d = int(distance)
-        
-        pathLossDb = 10 * exponent * math.log10(d / referenceDistance)
+        if dist == 0:
+            dist = 0.1
+        pathLossDb = 10 * exponent * math.log10(dist / referenceDistance)
         rxc = - referenceLoss - pathLossDb
         self.rssi = node2.txpower[wlan] + rxc
         return self.rssi

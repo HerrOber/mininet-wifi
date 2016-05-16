@@ -15,9 +15,10 @@ class accessPoint( object ):
               wpa_key_mgmt=None, rsn_pairwise=None, wpa_passphrase=None, encrypt=None, 
               wep_key0=None, **params ):
 
-        newname = str(ap)+'-'+str('wlan')
-        self.renameIface(intf, newname, wlan )
-        self.getMacAddress(ap, wlan)
+        if 'wlan' not in ap.params:
+            newname = str(ap)+'-'+str('wlan')
+            self.renameIface(intf, newname, wlan )
+            self.getMacAddress(ap, wlan)
         self.start (ap, country_code, auth_algs, wpa, wlan,
               wpa_key_mgmt, rsn_pairwise, wpa_passphrase, encrypt, 
               wep_key0, **params)
@@ -36,7 +37,11 @@ class accessPoint( object ):
         """ Starts an Access Point """
         
         self.cmd = ("echo \'")
-        self.cmd = self.cmd + ("interface=%s-wlan%s" % (ap, wlan)) # the interface used by the AP
+        if 'wlan' not in ap.params:
+            self.cmd = self.cmd + ("interface=%s-wlan%s" % (ap, wlan)) # the interface used by the AP
+        else:
+            wlan = ap.params.get('wlan')
+            self.cmd = self.cmd + ("interface=%s" % wlan) # the interface used by the AP
         self.cmd = self.cmd + ("\ndriver=nl80211")
         self.cmd = self.cmd + ("\nssid=%s" % ap.ssid[0]) # the name of the AP
         
@@ -106,6 +111,7 @@ class accessPoint( object ):
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         info = fcntl.ioctl(s.fileno(), 0x8927,  struct.pack('256s', '%s'[:15]) % iface)
         mac = (''.join(['%02x:' % ord(char) for char in info[18:24]])[:-1])
+        ap.mac = mac
         self.checkNetworkManager(mac)
         
     def checkNetworkManager(self, mac):
@@ -152,27 +158,33 @@ class accessPoint( object ):
     @classmethod
     def apBridge(self, ap, iface):
         """ AP Bridge """  
-        intf = str(ap)+'-'+'wlan'+str(iface)
-        os.system("ovs-vsctl add-port %s %s" % (ap, intf))
+        if 'wlan' not in ap.params:
+            intf = str(ap)+'-'+'wlan'+str(iface)
+            os.system("ovs-vsctl add-port %s %s" % (ap, intf))
+        else:
+            wlan = ap.params.get('wlan')
+            os.system("ovs-vsctl add-port %s %s" % (ap, wlan))
        
-    def setBw(self, ap, wlan):
-        """ Set bw to AP """  
-        iface =  str(ap) + '-wlan' + str(wlan)
-        
+    def setBw(self, ap, iface):
+        """ Set bw to AP """ 
         value = deviceDataRate(ap, None, None)
         bw = value.rate
         
-        ap.pexec("tc qdisc replace dev %s \
-            root handle 2: netem rate %.2fmbit \
-            latency 1ms \
-            delay 0.1ms" % (iface, bw))   
+        ap.cmd("tc qdisc replace dev %s \
+            root handle 2: tbf rate %sMbit burst 15000 latency 2ms" % (iface, bw))          
         #Reordering packets    
-        ap.pexec('tc qdisc add dev %s parent 2:1 pfifo limit 1000' % iface)
+        ap.cmd('tc qdisc add dev %s parent 2:1 handle 10: pfifo limit 1000' % (iface))
         
     def APfile(self, cmd, ap, wlan):
         """ run an Access Point and create the config file  """
-        iface = str(ap) + '-wlan' + str(wlan)
-        apcommand = cmd + ("\' > %s.conf" % iface)  
+        if 'wlan' not in ap.params:
+            wlan = str(ap) + '-wlan' + str(wlan)
+        else:
+            wlan = ap.params.get('wlan')
+            os.system('ifconfig %s down' % wlan)
+            os.system('ifconfig %s up' % wlan)
+        apcommand = cmd + ("\' > %s.conf" % wlan)  
         os.system(apcommand)
-        cmd = ("hostapd -B %s.conf" % iface)
+        cmd = ("hostapd -B %s.conf" % wlan)
         subprocess.check_output(cmd, shell=True)
+        self.setBw(ap, wlan)
