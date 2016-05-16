@@ -311,7 +311,7 @@ class mobility ( object ):
     
     @classmethod   
     def printPosition(self, node):
-        """ Print position of STAs and APs """
+        """ Print position of STAs and APs"""
         self.pos_x = node.position[0]
         self.pos_y = node.position[1]
         self.pos_z = node.position[2]   
