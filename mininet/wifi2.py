@@ -224,6 +224,9 @@ class station ( object ):
         self.confirmInfraAssociation(sta, ap, wlan)
         sta.associatedAp[wlan] = ap 
         ap.associatedStations.append(sta)
+        for apx in emulationEnvironment.apList:
+            if apx != ap and sta in apx.associatedStations:
+                apx.associatedStations.remove(sta)
         sta.ssid[wlan] = ap.ssid[0]
         sta.wlanToAssociate+=1
                 
@@ -331,6 +334,10 @@ class mobility ( object ):
                 station.iwCommand(sta, wlan, ('connect %s' % ap.ssid[0]))
                 #emulationEnvironment.getWiFiParameters(sta, wlan)
                 ap.associatedStations.append(sta)
+                for apx in emulationEnvironment.apList:
+                    if apx != ap and sta in apx.associatedStations:
+                        apx.associatedStations.remove(sta)
+
                 sta.associatedAp[wlan] = ap        
         emulationEnvironment.numberOfAssociatedStations(ap)
             
@@ -476,8 +483,25 @@ class mobility ( object ):
                 if ap in sta.inRangeAPs:
                     sta.inRangeAPs.remove(ap)
             self.setChannelParameters(sta, ap, dist, wlan)  
-            
-                
+
+        for ap1 in emulationEnvironment.apList:
+            for ap2 in emulationEnvironment.apList:
+                if ap1 != ap2:
+                    d = distance(ap1, ap2)
+                    dist = d.dist
+                    if dist < ap1.range:
+                        if ap1 not in ap2.inRangeAPs:
+                            ap2.inRangeAPs.append(ap1)
+                    else:
+                        if ap1 in ap2.inRangeAPs:
+                            ap2.inRangeAPs.remove(ap1)
+                    if dist < ap2.range:
+                        if ap2 not in ap1.inRangeAPs:
+                            ap1.inRangeAPs.append(ap2)
+                    else:
+                        if ap2 in ap1.inRangeAPs:
+                            ap2.inRangeAPs.remove(ap2)
+
     @classmethod                
     def parameters(self):
         while emulationEnvironment.continue_:
