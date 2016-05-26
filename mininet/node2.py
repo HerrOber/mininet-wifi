@@ -147,6 +147,7 @@ class Node( object ):
         self.associatedStations = []
         self.isAssociated = []
         self.staAssociated = []
+        self.allowAssociations = True
 
         self.switchIP = "0.0.0.0"
 

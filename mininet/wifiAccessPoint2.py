@@ -197,7 +197,7 @@ class accessPoint( object ):
         iface = str(ap) + '-wlan' + str(wlan)
         #print "stuff"
         #print iface
-        apcommand = cmd + ("\' > %s.conf" % iface)  
+        apcommand = cmd + ("~\' > %s.conf" % iface)  
         #print apcommand
         ap.cmd(apcommand)
         #os.system(apcommand)
@@ -212,5 +212,6 @@ class accessPoint( object ):
         #print cmd
         print "Starting hostapd (%s)" % ap.name
         out = ap.cmd(cmd)
+        #print out
         debug(out)
         #subprocess.check_output(cmd, shell=True)

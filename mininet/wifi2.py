@@ -214,7 +214,6 @@ class station ( object ):
     def cmd_associate(self, node1, node2, wlan):
         sta = node1
         ap = node2
-        
         if sta.passwd == None:
             self.iwCommand(node1, wlan, ('connect %s' % ap.ssid[0]))
         elif sta.encrypt == 'wpa' or sta.encrypt == 'wpa2':
@@ -323,6 +322,9 @@ class mobility ( object ):
     @classmethod   
     def handover(self, sta, ap, wlan, distance, changeAP, ac=None, **params):
         """handover"""
+        if ap.allowAssociations == False:
+            return
+        #print "associating %s to %s" %(sta, ap)
         if ac == 'llf' or ac == 'ssf':
             station.iwCommand(sta, wlan, 'disconnect')
             station.iwCommand(sta, wlan, ('connect %s' % ap.ssid[0]))
